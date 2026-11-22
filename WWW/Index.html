@@ -1,0 +1,119 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Quest OS</title>
+<style>
+*{box-sizing:border-box;margin:0;font-family:system-ui,sans-serif;color:#fff;-webkit-user-select:none;user-select:none}
+html,body{height:100%;overflow:hidden;background:#0b0d1a}
+#bg{position:fixed;inset:0;transition:background 1s;background:linear-gradient(135deg,#1a1040,#0b2a4a)}
+#cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .6s}
+#fx{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:50}
+.glass{background:rgba(255,255,255,.12);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1px solid rgba(255,255,255,.25);border-radius:28px;box-shadow:0 20px 60px rgba(0,0,0,.45)}
+#start{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#1a1040,#0b2a4a)}
+#start .glass{padding:32px;width:min(560px,90vw);text-align:center}
+h1{font-size:30px;letter-spacing:2px;margin-bottom:6px}
+p.s{opacity:.7;margin-bottom:18px;font-size:14px}
+input[type=text]{width:100%;padding:14px 18px;border-radius:16px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.3);font-size:16px;margin-bottom:14px;-webkit-user-select:text;user-select:text}
+.btn{cursor:pointer;border:0;border-radius:20px;padding:14px 22px;font-size:16px;background:rgba(255,255,255,.15);transition:.2s}
+.btn.main{background:linear-gradient(135deg,#7c9cff,#b36bff);font-weight:700;width:100%;padding:16px}
+.hov{transform:scale(1.12);background:rgba(124,156,255,.55)!important;box-shadow:0 0 28px #7c9cff}
+#menu{position:fixed;left:50%;top:50%;z-index:20;width:min(580px,86vw);padding:22px;transform:translate(-50%,-50%);animation:fl 5s ease-in-out infinite;transition:opacity .4s}
+@keyframes fl{50%{margin-top:-12px}}
+#menu.off{opacity:0;pointer-events:none}
+.top{display:flex;justify-content:space-between;margin-bottom:14px;opacity:.85}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.ic{display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 6px;font-size:13px}
+.ic b{font-size:34px;font-weight:400}
+#win{position:fixed;left:50%;top:50%;z-index:30;width:min(94vw,900px);height:min(88vh,520px);transform:translate(-50%,-50%);display:none;flex-direction:column;overflow:hidden}
+#win.on{display:flex}
+.bar{display:flex;gap:8px;padding:10px;align-items:center}
+.bar span{flex:1;font-weight:600}
+#body{flex:1;overflow:auto;background:rgba(0,0,0,.35)}
+#body iframe{width:100%;height:3500px;border:0;background:#fff;display:block}
+#body iframe.yt{height:100%}
+.pad{padding:20px}
+.bgs{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px}
+input[type=range]{width:100%;height:36px;accent-color:#7c9cff}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:90;padding:10px 20px;border-radius:20px;display:none}
+</style></head><body>
+<div id="bg"></div><video id="cam" playsinline muted></video><canvas id="fx"></canvas>
+
+<div id="start"><div class="glass"><h1>QUEST OS</h1><p class="s">Cole um link do YouTube ou Google e toque em Iniciar</p>
+<input id="url" type="text" placeholder="https://youtube.com/watch?v=..."><button class="btn main" id="go">Iniciar</button></div></div>
+
+<div id="menu" class="glass off"><div class="top"><b id="clk"></b><span>Pinça ×2 = esconder/mostrar</span></div>
+<div class="grid">
+<button class="btn ic" data-a="link"><b>▶️</b>Meu link</button>
+<button class="btn ic" data-a="google"><b>🔎</b>Google</button>
+<button class="btn ic" data-a="bgs"><b>🌌</b>Fundos</button>
+<button class="btn ic" data-a="mute"><b id="mi">🔊</b>Som</button></div></div>
+
+<div id="win" class="glass"><div class="bar"><span id="wt"></span><button class="btn" data-a="close">✕</button></div><div id="body"></div></div>
+<div id="toast" class="glass"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js"></script>
+<script>
+const $=s=>document.querySelector(s),W=()=>innerWidth,H=()=>innerHeight;
+let userUrl='',vol=.5,snd=true,ac,master,stopCur=()=>{};
+function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display='none',2500)}
+setInterval(()=>$('#clk').textContent=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}),1000);
+
+/* ---------- ÁUDIO DOS FUNDOS ---------- */
+function A(){if(!ac){ac=new(window.AudioContext||webkitAudioContext)();master=ac.createGain();master.connect(ac.destination)}ac.resume();master.gain.value=snd?vol:0}
+function noise(){const b=ac.createBuffer(1,ac.sampleRate*2,ac.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;const s=ac.createBufferSource();s.buffer=b;s.loop=true;s.start();return s}
+function lfo(f,amt,p,L){const o=ac.createOscillator(),g=ac.createGain();o.frequency.value=f;g.gain.value=amt;o.connect(g);g.connect(p);o.start();L.push(o)}
+function F(t,f,q){const x=ac.createBiquadFilter();x.type=t;x.frequency.value=f;if(q)x.Q.value=q;return x}
+const BG={
+cam:{n:'Câmera',i:'📷',c:'#000'},
+rain:{n:'Chuva',i:'🌧️',c:'linear-gradient(#1b2735,#4a5d73)',s(o,L){const n=noise();L.push(n);n.connect(F('highpass',1200)).connect(F('lowpass',9000)).connect(o)}},
+ocean:{n:'Oceano',i:'🌊',c:'linear-gradient(#0a3d62,#38ada9)',s(o,L){const n=noise(),g=ac.createGain();g.gain.value=.5;L.push(n);n.connect(F('lowpass',600)).connect(g).connect(o);lfo(.12,.4,g.gain,L)}},
+wind:{n:'Vento',i:'🍃',c:'linear-gradient(#2c3e50,#bdc3c7)',s(o,L){const n=noise(),f=F('bandpass',500,1);L.push(n);n.connect(f).connect(o);lfo(.15,300,f.frequency,L)}},
+space:{n:'Espaço',i:'🪐',c:'radial-gradient(#2b1055,#000)',s(o,L){[55,82.5,110.4].forEach(h=>{const x=ac.createOscillator(),g=ac.createGain();x.frequency.value=h;g.gain.value=.12;x.connect(g);g.connect(o);x.start();L.push(x);lfo(.07,.05,g.gain,L)})}}};
+function setBg(k){const b=BG[k];$('#bg').style.background=b.c;$('#cam').style.opacity=k=='cam'?1:0;stopCur();A();
+ if(b.s){const o=ac.createGain(),L=[];o.gain.value=1;o.connect(master);b.s(o,L);stopCur=()=>{o.gain.value=0;setTimeout(()=>{L.forEach(x=>{try{x.stop()}catch(e){}});o.disconnect()},300)}}else stopCur=()=>{};toast(b.n)}
+
+/* ---------- JANELAS ---------- */
+function yt(u){const m=u.match(/(?:v=|youtu\.be\/|shorts\/|embed\/)([\w-]{11})/);return m?'https://www.youtube.com/embed/'+m[1]+'?autoplay=1':null}
+function frame(src,cls){$('#body').innerHTML='<iframe '+(cls?'class="'+cls+'" ':'')+'src="'+src+'" allow="autoplay;encrypted-media;microphone" referrerpolicy="no-referrer"></iframe>';$('#body').scrollTop=0}
+function openWin(t){$('#wt').textContent=t;$('#win').classList.add('on');$('#menu').classList.add('off')}
+function act(a){
+ if(a=='close'){$('#win').classList.remove('on');$('#menu').classList.remove('off');return}
+ if(a=='mute'){snd=!snd;A();$('#mi').textContent=snd?'🔊':'🔇';return}
+ if(a=='link'){if(!userUrl)return toast('Nenhum link informado');openWin('Meu link');const y=yt(userUrl);y?frame(y,'yt'):frame(userUrl)}
+ if(a=='google'){openWin('Google');$('#body').innerHTML='<div class="bar"><input id="q" type="text" placeholder="Pesquisar no Google" style="margin:0;flex:1"><button class="btn" data-a="mic">🎤</button><button class="btn" data-a="search">Ir</button></div><div id="res" style="height:calc(100% - 64px);overflow:auto"></div>';$('#res').innerHTML='<iframe src="https://www.google.com/webhp?igu=1"></iframe>'}
+ if(a=='search'){const q=$('#q').value.trim();if(q)$('#res').innerHTML='<iframe src="https://www.google.com/search?igu=1&q='+encodeURIComponent(q)+'"></iframe>';$('#res').scrollTop=0}
+ if(a=='mic'){const R=window.SpeechRecognition||window.webkitSpeechRecognition;if(!R)return toast('Voz não disponível neste aparelho');const r=new R();r.lang='pt-BR';r.onresult=e=>{$('#q').value=e.results[0][0].transcript;act('search')};r.onerror=()=>toast('Não consegui ouvir');r.start();toast('🎤 Fale agora...')}
+ if(a=='bgs'){openWin('Fundos');A();$('#body').innerHTML='<div class="pad"><div class="bgs">'+Object.keys(BG).map(k=>'<button class="btn ic" data-bg="'+k+'"><b>'+BG[k].i+'</b>'+BG[k].n+'</button>').join('')+'</div><p class="s">Volume do fundo</p><input type="range" id="vol" min="0" max="100" value="'+vol*100+'"></div>';$('#vol').oninput=e=>{vol=e.target.value/100;A()}}}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-a],[data-bg]');if(!b)return;b.dataset.bg?setBg(b.dataset.bg):act(b.dataset.a)});
+
+/* ---------- INICIAR ---------- */
+$('#go').onclick=async()=>{userUrl=$('#url').value.trim();if(userUrl&&!/^https?:/.test(userUrl))userUrl='https://'+userUrl;
+ $('#start').style.display='none';$('#menu').classList.remove('off');A();
+ try{const s=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:640,height:480},audio:false});$('#cam').srcObject=s;await $('#cam').play();track()}catch(e){toast('Câmera indisponível: use toque')}};
+
+/* ---------- HAND TRACKING + PINÇA ---------- */
+const fx=$('#fx'),g=fx.getContext('2d');function rs(){fx.width=W();fx.height=H()}rs();onresize=rs;
+const MIRROR=false;let cx=0,cy=0,down=false,ps=null,last=0,hv=null;
+const BONES=[[0,1,2,3,4],[0,5,6,7,8],[9,10,11,12],[13,14,15,16],[0,17,18,19,20],[5,9,13,17]];
+function track(){const hands=new Hands({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/'+f});
+ hands.setOptions({maxNumHands:1,modelComplexity:0,minDetectionConfidence:.6,minTrackingConfidence:.6});hands.onResults(res);
+ (async function l(){if($('#cam').readyState>=2)await hands.send({image:$('#cam')});requestAnimationFrame(l)})()}
+function P(p){return[(MIRROR?1-p.x:p.x)*W(),p.y*H()]}
+function res(r){g.clearRect(0,0,W(),H());const l=r.multiHandLandmarks&&r.multiHandLandmarks[0];if(!l){if(down)up();return}
+ g.strokeStyle='rgba(255,255,255,.55)';g.lineWidth=3;BONES.forEach(b=>{g.beginPath();b.forEach((i,k)=>{const[x,y]=P(l[i]);k?g.lineTo(x,y):g.moveTo(x,y)});g.stroke()});
+ l.forEach(p=>{const[x,y]=P(p);g.fillStyle='#fff';g.beginPath();g.arc(x,y,4,0,7);g.fill()});
+ const sz=Math.hypot(l[0].x-l[9].x,l[0].y-l[9].y),d=Math.hypot(l[4].x-l[8].x,l[4].y-l[8].y)/sz;
+ const[ax,ay]=P(l[8]),[bx,by]=P(l[4]);const x=(ax+bx)/2,y=(ay+by)/2;cx+=(x-cx)*.45;cy+=(y-cy)*.45;
+ if(!down&&d<.28){down=true;dn()}else if(down&&d>.42){down=false;up()}
+ else if(down)mv();
+ hover();g.strokeStyle=down?'#7c9cff':'#fff';g.fillStyle=down?'rgba(124,156,255,.6)':'rgba(255,255,255,.2)';g.lineWidth=4;g.beginPath();g.arc(cx,cy,down?12:22,0,7);g.fill();g.stroke()}
+function el(){fx.style.display='none';const e=document.elementFromPoint(cx,cy);fx.style.display='';return e}
+function hover(){const e=el(),t=e&&e.closest('.btn,input[type=range]');if(hv&&hv!==t)hv.classList.remove('hov');if(t)t.classList.add('hov');hv=t}
+function dn(){const e=el();ps={x:cx,y:cy,e,sc:e&&e.closest('#body,#res'),st:0,moved:false};if(ps.sc)ps.st=ps.sc.scrollTop;slide()}
+function slide(){const e=ps&&ps.e;if(e&&e.type=='range'){const r=e.getBoundingClientRect();e.value=Math.max(0,Math.min(100,(cx-r.left)/r.width*100));e.dispatchEvent(new Event('input'));ps.moved=true}}
+function mv(){if(!ps)return;slide();if(ps.sc&&Math.abs(cy-ps.y)>14){ps.moved=true;ps.sc.scrollTop=ps.st-(cy-ps.y)*2}}
+function up(){if(!ps)return;const now=Date.now(),dbl=now-last<550;
+ if(dbl){last=0;$('#menu').classList.toggle('off');if(!$('#menu').classList.contains('off'))$('#win').classList.remove('on')}
+ else{last=now;if(!ps.moved&&ps.e){const t=ps.e.closest('button,.btn,input');if(t){t.focus&&t.focus();t.click()}}}
+ ps=null}
+</script></body></html>
+                                                                                      
